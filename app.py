@@ -113,6 +113,10 @@ if api_key:
           .str.contains(prdlst_query, case=False)
       ]
 
+    # 🔄 제품명 기준으로 가나다순 정렬 적용
+    if not filtered_df.empty and "제품명" in filtered_df.columns:
+      filtered_df = filtered_df.sort_values(by="제품명", ascending=True)
+
     st.markdown("---")
     st.subheader(
         f"📦 검색 결과 카드 (총 {len(filtered_df)}건)",
@@ -128,7 +132,6 @@ if api_key:
         is_urgent = False
         end_date_obj = None
 
-        # 날짜 형식 파싱 (YYYYMMDD)
         if len(end_date_str) == 8 and end_date_str.isdigit():
           try:
             end_date_obj = datetime.strptime(end_date_str, "%Y%m%d").date()
@@ -139,9 +142,7 @@ if api_key:
           except:
             pass
 
-        # 만료 여부에 따라 컨테이너 테두리 색상 또는 레이블 분기
         if is_expired:
-          # 만료된 항목은 별도 경고 스타일 섹션
           with st.container(border=True):
             st.markdown(
                 f"### ❌ [기한 만료] **{row.get('제품명', '정보 없음')}**"
@@ -161,7 +162,6 @@ if api_key:
                   f"**⏳ 만료일자:** :red[**{end_date_str} (만료됨)**]"
               )
         else:
-          # 정상 또는 60일 이내 임박 항목
           with st.container(border=True):
             st.markdown(f"### 🍏 **{row.get('제품명', '정보 없음')}**")
 
@@ -185,7 +185,6 @@ if api_key:
     else:
       st.warning("검색 조건에 일치하는 데이터가 없습니다.")
 
-    # CSV 다운로드 버튼
     st.markdown("---")
     csv = filtered_df.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
