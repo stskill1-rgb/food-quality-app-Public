@@ -113,8 +113,7 @@ if api_key:
           .str.contains(prdlst_query, case=False)
       ]
 
-    # 🔄 정렬 로직 적용
-    # 만료 여부를 판별하는 임시 컬럼 생성 (기한 만료된 항목을 정렬 시 뒤로 보내기 위함)
+    # 정렬 로직 (1순위 식품유형, 2순위 제품명, 3순위 동일 제품명 내 만료 항목 후순위)
     if not filtered_df.empty:
       today = datetime.now().date()
 
@@ -124,17 +123,16 @@ if api_key:
         if len(end_date_str) == 8 and end_date_str.isdigit():
           try:
             if datetime.strptime(end_date_str, "%Y%m%d").date() < today:
-              return 1  # 만료됨 (뒤로 정렬하기 위해 큰 값 부여)
+              return 1
           except:
             pass
-        return 0  # 정상 또는 임박
+        return 0
 
 
       filtered_df["_expired_sort"] = filtered_df["만료일자"].apply(
           get_expiry_status
       )
 
-      # 1순위: 식품유형, 2순위: 제품명, 3순위: 동일 제품명 내에서 만료 여부(만료된 것이 뒤로)
       sort_cols = []
       sort_ascending = []
 
@@ -146,7 +144,7 @@ if api_key:
         sort_ascending.append(True)
 
       sort_cols.append("_expired_sort")
-      sort_ascending.append(True)  # 0이 먼저(정상), 1이 나중(만료)
+      sort_ascending.append(True)
 
       filtered_df = filtered_df.sort_values(
           by=sort_cols, ascending=sort_ascending
@@ -178,6 +176,7 @@ if api_key:
           except:
             pass
 
+        # HTML 스타일을 활용하여 만료 임박(60일 이내)일 경우 카드 테두리에 주황/빨간색 강조 적용
         if is_expired:
           with st.container(border=True):
             st.markdown(
@@ -197,6 +196,32 @@ if api_key:
               st.markdown(
                   f"**⏳ 만료일자:** :red[**{end_date_str} (만료됨)**]"
               )
+        elif is_urgent:
+          # 60일 이내 만료 임박 항목: 커스텀 HTML 테두리로 시각적 강조 효과 부여
+          st.markdown(
+              f"""
+                    <div style="border: 2px solid #ff4b4b; border-radius: 10px; padding: 15px; margin-bottom: 10px; background-color: #fff5f5;">
+                        <h4 style="margin-top: 0; color: #d32f2f;">⚠️ [만료 임박] {row.get('제품명', '정보 없음')}</h4>
+                        <div style="display: flex; justify-content: space-between; font-size: 14px;">
+                            <div style="flex: 1;">
+                                <b>🏢 업소명:</b> {row.get('업소명', '-')}<br>
+                                <b>🏷️ 품목보고번호:</b> {row.get('품목보고번호', '-')}<br>
+                                <b>⚖️ 제품용량:</b> {row.get('제품용량', '-')}
+                            </div>
+                            <div style="flex: 1;">
+                                <b>📂 식품유형:</b> {row.get('식품유형', '-')}<br>
+                                <b>🔢 인증번호:</b> {row.get('인증번호', '-')}<br>
+                                <b>📜 인허가번호:</b> {row.get('인허가번호', '-')}
+                            </div>
+                            <div style="flex: 1;">
+                                <b>📅 인증일자:</b> {row.get('인증일자', '-')}<br>
+                                <b>⏳ 만료일자:</b> <span style="color: red; font-weight: bold;">{end_date_str} (임박!)</span>
+                            </div>
+                        </div>
+                    </div>
+                    """,
+              unsafe_allow_html=True,
+          )
         else:
           with st.container(border=True):
             st.markdown(f"### 🍏 **{row.get('제품명', '정보 없음')}**")
@@ -212,12 +237,7 @@ if api_key:
               st.markdown(f"**📜 인허가번호:** {row.get('인허가번호', '-')}")
             with c3:
               st.markdown(f"**📅 인증일자:** {row.get('인증일자', '-')}")
-              if is_urgent:
-                st.markdown(
-                    f"**⏳ 만료일자:** :red[**{end_date_str} (만료 임박!)**]"
-                )
-              else:
-                st.markdown(f"**⏳ 만료일자:** {end_date_str}")
+              st.markdown(f"**⏳ 만료일자:** {end_date_str}")
     else:
       st.warning("검색 조건에 일치하는 데이터가 없습니다.")
 
