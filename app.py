@@ -113,9 +113,45 @@ if api_key:
           .str.contains(prdlst_query, case=False)
       ]
 
-    # 🔄 제품명 기준으로 가나다순 정렬 적용
-    if not filtered_df.empty and "제품명" in filtered_df.columns:
-      filtered_df = filtered_df.sort_values(by="제품명", ascending=True)
+    # 🔄 정렬 로직 적용
+    # 만료 여부를 판별하는 임시 컬럼 생성 (기한 만료된 항목을 정렬 시 뒤로 보내기 위함)
+    if not filtered_df.empty:
+      today = datetime.now().date()
+
+
+      def get_expiry_status(end_date_str):
+        end_date_str = str(end_date_str).strip()
+        if len(end_date_str) == 8 and end_date_str.isdigit():
+          try:
+            if datetime.strptime(end_date_str, "%Y%m%d").date() < today:
+              return 1  # 만료됨 (뒤로 정렬하기 위해 큰 값 부여)
+          except:
+            pass
+        return 0  # 정상 또는 임박
+
+
+      filtered_df["_expired_sort"] = filtered_df["만료일자"].apply(
+          get_expiry_status
+      )
+
+      # 1순위: 식품유형, 2순위: 제품명, 3순위: 동일 제품명 내에서 만료 여부(만료된 것이 뒤로)
+      sort_cols = []
+      sort_ascending = []
+
+      if "식품유형" in filtered_df.columns:
+        sort_cols.append("식품유형")
+        sort_ascending.append(True)
+      if "제품명" in filtered_df.columns:
+        sort_cols.append("제품명")
+        sort_ascending.append(True)
+
+      sort_cols.append("_expired_sort")
+      sort_ascending.append(True)  # 0이 먼저(정상), 1이 나중(만료)
+
+      filtered_df = filtered_df.sort_values(
+          by=sort_cols, ascending=sort_ascending
+      )
+      filtered_df = filtered_df.drop(columns=["_expired_sort"])
 
     st.markdown("---")
     st.subheader(
