@@ -14,21 +14,37 @@ st.markdown(
 )
 
 
-# API 데이터 호출 함수 (식품안전나라 맞춤형)
+# API 데이터 호출 및 한글 컬럼 변환 함수
 @st.cache_data
 def fetch_food_data(api_key):
-  # 식품안전나라 오픈API URL 규격: /api/{keyId}/{serviceId}/{dataType}/{startIdx}/{endIdx}
   url = f"http://openapi.foodsafetykorea.go.kr/api/{api_key}/I0080/json/1/100"
 
   try:
     response = requests.get(url)
     res_json = response.json()
 
-    # 식품안전나라 JSON 응답 구조 파싱 (I0080 -> row)
     service_data = res_json.get("I0080", {})
     rows = service_data.get("row", [])
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+
+    if not df.empty:
+      # 영문 컬럼명을 보기 쉬운 한글 대장 항목명으로 변경
+      column_mapping = {
+          "PRDLST_NM": "제품명",
+          "BSSH_NM": "업소명",
+          "LCNS_NO": "인허가번호",
+          "PRDLST_REPORT_NO": "품목보고번호",
+          "APPN_BGN_DT": "인증일자",
+          "APPN_END_DT": "만료일자",
+          "CN_WT": "제품용량",
+          "PRDLST_CD_NM": "식품유형",
+          "CHILD_FFQ_CRTFC_NO": "인증번호",
+          "CHILD_FAVOR_FOOD_TYPE_NM": "어린이기호식품유형",
+      }
+      df = df.rename(columns=column_mapping)
+
+    return df
   except Exception as e:
     st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
     return pd.DataFrame()
@@ -66,7 +82,7 @@ if api_key:
     else:
       filtered_df = df
 
-    # 데이터 테이블 출력
+    # 데이터 테이블 출력 (한글 헤더 적용됨)
     st.dataframe(filtered_df, use_container_width=True)
 
     # 데이터 다운로드 버튼
@@ -78,9 +94,6 @@ if api_key:
         mime="text/csv",
     )
   else:
-    st.warning(
-        "조회된 데이터가 없습니다. 인증키가 올바른지 또는 서비스 승인 상태를"
-        " 확인해주세요."
-    )
+    st.warning("조회된 데이터가 없습니다.")
 else:
   st.info("시작하려면 API 인증키를 설정해주세요.")
