@@ -1,9 +1,10 @@
+from datetime import datetime
 import math
 import pandas as pd
 import requests
 import streamlit as st
 
-# 페이지 설정 (넓은 화면 레이아웃)
+# 페이지 설정
 st.set_page_config(
     page_title="어린이기호식품 품질인증 대장", page_icon="🍏", layout="wide"
 )
@@ -14,7 +15,7 @@ st.markdown(
 )
 
 
-# 전체 데이터를 페이지별로 모두 끌어오는 함수
+# 전체 데이터 수집 함수
 @st.cache_data
 def fetch_all_food_data(api_key):
   all_rows = []
@@ -70,7 +71,7 @@ def fetch_all_food_data(api_key):
   return df, total_count
 
 
-# Streamlit Secrets에 등록된 API 키 불러오기
+# Streamlit Secrets API 키 로드
 if "API_KEY" in st.secrets:
   api_key = st.secrets["API_KEY"]
 else:
@@ -89,7 +90,7 @@ if api_key:
     st.markdown("---")
     st.subheader("🔍 독립형 검색 필터")
 
-    # 업소명 검색란과 제품명 검색란을 가로로 나란히 배치
+    # 업소명 / 제품명 검색 필터 분리
     col1, col2 = st.columns(2)
     with col1:
       bssh_query = st.text_input(
@@ -100,7 +101,6 @@ if api_key:
           "🍪 제품명으로만 검색", placeholder="예: 딸기우유"
       )
 
-    # 필터링 로직 (각각 독립적으로 동작)
     filtered_df = df.copy()
     if bssh_query:
       filtered_df = filtered_df[
@@ -120,39 +120,79 @@ if api_key:
     )
 
     if not filtered_df.empty:
-      # 제품별/업소별 정보를 네모 섹션(카드) 형태로 예쁘게 출력
-      for _, row in filtered_df.iterrows():
-        with st.container(border=True):
-          st.markdown(f"### 🍏 **{row.get('제품명', '정보 없음')}**")
+      today = datetime.now().date()
 
-          # 카드 내부 상세 정보 배치 (2열 구조)
-          c1, c2, c3 = st.columns(3)
-          with c1:
-            st.markdown(f"**🏢 업소명:** {row.get('업소명', '-')}")
-            st.markdown(f"**🏷️ 품목보고번호:** {row.get('품목보고번호', '-')}")
-            st.markdown(f"**⚖️ 제품용량:** {row.get('제품용량', '-')}")
-          with c2:
-            st.markdown(f"**📂 식품유형:** {row.get('식품유형', '-')}")
+      for _, row in filtered_df.iterrows():
+        end_date_str = str(row.get("만료일자", "")).strip()
+        is_expired = False
+        is_urgent = False
+        end_date_obj = None
+
+        # 날짜 형식 파싱 (YYYYMMDD)
+        if len(end_date_str) == 8 and end_date_str.isdigit():
+          try:
+            end_date_obj = datetime.strptime(end_date_str, "%Y%m%d").date()
+            if end_date_obj < today:
+              is_expired = True
+            elif 0 <= (end_date_obj - today).days <= 60:
+              is_urgent = True
+          except:
+            pass
+
+        # 만료 여부에 따라 컨테이너 테두리 색상 또는 레이블 분기
+        if is_expired:
+          # 만료된 항목은 별도 경고 스타일 섹션
+          with st.container(border=True):
             st.markdown(
-                f"**🍬 어린이기호식품유형:**"
-                f" {row.get('어린이기호식품유형', '-')}"
+                f"### ❌ [기한 만료] **{row.get('제품명', '정보 없음')}**"
             )
-            st.markdown(f"**🔢 인증번호:** {row.get('인증번호', '-')}")
-          with c3:
-            st.markdown(f"**📅 인증일자:** {row.get('인증일자', '-')}")
-            st.markdown(f"**⏳ 만료일자:** {row.get('만료일자', '-')}")
-            st.markdown(f"**📜 인허가번호:** {row.get('인허가번호', '-')}")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+              st.markdown(f"**🏢 업소명:** {row.get('업소명', '-')}")
+              st.markdown(f"**🏷️ 품목보고번호:** {row.get('품목보고번호', '-')}")
+              st.markdown(f"**⚖️ 제품용량:** {row.get('제품용량', '-')}")
+            with c2:
+              st.markdown(f"**📂 식품유형:** {row.get('식품유형', '-')}")
+              st.markdown(f"**🔢 인증번호:** {row.get('인증번호', '-')}")
+              st.markdown(f"**📜 인허가번호:** {row.get('인허가번호', '-')}")
+            with c3:
+              st.markdown(f"**📅 인증일자:** {row.get('인증일자', '-')}")
+              st.markdown(
+                  f"**⏳ 만료일자:** :red[**{end_date_str} (만료됨)**]"
+              )
+        else:
+          # 정상 또는 60일 이내 임박 항목
+          with st.container(border=True):
+            st.markdown(f"### 🍏 **{row.get('제품명', '정보 없음')}**")
+
+            c1, c2, c3 = st.columns(3)
+            with c1:
+              st.markdown(f"**🏢 업소명:** {row.get('업소명', '-')}")
+              st.markdown(f"**🏷️ 품목보고번호:** {row.get('품목보고번호', '-')}")
+              st.markdown(f"**⚖️ 제품용량:** {row.get('제품용량', '-')}")
+            with c2:
+              st.markdown(f"**📂 식품유형:** {row.get('식품유형', '-')}")
+              st.markdown(f"**🔢 인증번호:** {row.get('인증번호', '-')}")
+              st.markdown(f"**📜 인허가번호:** {row.get('인허가번호', '-')}")
+            with c3:
+              st.markdown(f"**📅 인증일자:** {row.get('인증일자', '-')}")
+              if is_urgent:
+                st.markdown(
+                    f"**⏳ 만료일자:** :red[**{end_date_str} (만료 임박!)**]"
+                )
+              else:
+                st.markdown(f"**⏳ 만료일자:** {end_date_str}")
     else:
       st.warning("검색 조건에 일치하는 데이터가 없습니다.")
 
-    # 전체 데이터 다운로드 버튼
+    # CSV 다운로드 버튼
     st.markdown("---")
     csv = filtered_df.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
         label="📥 현재 검색된 대장 데이터를 CSV로 다운로드",
         data=csv,
         file_name="food_quality_cert_filtered.csv",
-        mime="text/css" if False else "text/csv",
+        mime="text/csv",
     )
   else:
     st.warning("조회된 데이터가 없습니다.")
