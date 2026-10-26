@@ -14,22 +14,23 @@ st.markdown(
 )
 
 
-# API 데이터 호출 및 한글 컬럼 변환 함수
+# API 데이터 호출 및 한글 컬럼 변환 함수 (최대 1000건으로 확대)
 @st.cache_data
 def fetch_food_data(api_key):
-  url = f"http://openapi.foodsafetykorea.go.kr/api/{api_key}/I0080/json/1/100"
+  # 1부터 1000까지의 데이터를 한 번에 가져오도록 범위 확장
+  url = f"http://openapi.foodsafetykorea.go.kr/api/{api_key}/I0080/json/1/1000"
 
   try:
     response = requests.get(url)
     res_json = response.json()
 
     service_data = res_json.get("I0080", {})
+    total_count = service_data.get("total_count", "0")
     rows = service_data.get("row", [])
 
     df = pd.DataFrame(rows)
 
     if not df.empty:
-      # 영문 컬럼명을 보기 쉬운 한글 대장 항목명으로 변경
       column_mapping = {
           "PRDLST_NM": "제품명",
           "BSSH_NM": "업소명",
@@ -44,10 +45,10 @@ def fetch_food_data(api_key):
       }
       df = df.rename(columns=column_mapping)
 
-    return df
+    return df, total_count
   except Exception as e:
     st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
-    return pd.DataFrame()
+    return pd.DataFrame(), "0"
 
 
 # Streamlit Secrets에 등록된 API 키 불러오기
@@ -57,17 +58,19 @@ else:
   api_key = st.text_input("공공데이터 API 인증키를 입력하세요", type="password")
 
 if api_key:
-  with st.spinner("데이터를 실시간으로 불러오는 중입니다..."):
-    df = fetch_food_data(api_key)
+  with st.spinner("전체 데이터를 실시간으로 불러오는 중입니다..."):
+    df, total_count = fetch_food_data(api_key)
 
   if not df.empty:
     st.success(
-        f"총 {len(df)}건의 데이터를 성공적으로 불러왔습니다! (실시간 데이터 기준)"
+        f"공식 총 {total_count}건 중 상위 {len(df)}건의 데이터를 성공적으로"
+        " 불러왔습니다!"
     )
 
-    # 검색 및 필터 기능
+    # 검색 및 필터 기능 (회사명이나 제품명으로 즉시 찾기 가능)
     search_query = st.text_input(
-        "🔍 제품명 또는 업체명 검색", placeholder="검색어를 입력하세요"
+        "🔍 제품명 또는 업체명 검색",
+        placeholder="찾으시는 회사명이나 제품명을 입력하세요",
     )
 
     if search_query:
@@ -82,7 +85,7 @@ if api_key:
     else:
       filtered_df = df
 
-    # 데이터 테이블 출력 (한글 헤더 적용됨)
+    # 데이터 테이블 출력
     st.dataframe(filtered_df, use_container_width=True)
 
     # 데이터 다운로드 버튼
